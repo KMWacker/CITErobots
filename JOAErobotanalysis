@@ -1,0 +1,174 @@
+***********************************
+** CITE JoAE Application: Robots **
+******** K.M. Wacker, 2024 ********
+***********************************
+
+*0 setup and path (adjust to your system)
+clear all
+set more off, perm
+
+cd "C:\Users\KMWacker\ownCloud\Documents\Projects\HE_robots\"
+global outputpath "C:\Users\KMWacker\Documents\enproceso\Papers\FDIgrowth\JOAE_outputs"
+
+***************
+*** 1. DATA ***
+***************
+
+/* 1a Penn World Tables */
+
+use "https://www.rug.nl/ggdc/docs/pwt100.dta"
+
+keep if year>=2004 & year < 2019	/* to match robot spells */
+keep countrycode country year rgdpo pop emp avh hc ctfp labsh irr pl_i pl_n cn	/* potentially relevant variables */
+
+gen k_l_ratio = cn/emp
+label var k_l_ratio "K/L ratio"
+gen ln_k_l_ratio = ln(k_l_ratio)
+label var ln_k_l_ratio "ln(K/L ratio)"
+gen ln_gdp_pc = ln(rgdpo/emp)
+label var ln_gdp_pc "ln(GDP p.c.)"
+
+*compute 'demand' change
+encode countrycode, gen(isoctry)
+xtset isoctry year
+gen five_yr_lgdppc = (ln_gdp_pc + L.ln_gdp_pc + L2.ln_gdp_pc + L3.ln_gdp_pc + L4.ln_gdp_pc)/5
+gen d_demand = (five_yr_lgdppc - L10.five_yr_lgdppc)/10
+
+drop rgdpo pop emp avh hc cn pl_i pl_n k_l_ratio five_yr_lgdppc isoctry /* potentially interesting but not essential */
+
+* make averages over time for panel:
+collapse (first) country (mean) ctfp (mean) labsh (mean) irr (mean) ln_k_l_ratio (mean) ln_gdp_pc (last) d_demand, by(countrycode)
+
+
+/* 1b Merge with robot data */
+rename countrycode Country
+
+merge 1:m Country using "Data\HE_robotresh_firstdiffdata.dta"
+keep if _merge==3
+drop _merge
+
+keep Country country ctfp labsh irr ln_k_l_ratio ln_gdp_pc sector_code period Sectorcode IFRcountry sectorname_long IndustryFinaldemand pctchg_Robot_density lnEMPN emp_share_sec panel_id country_id sector_id d_demand
+
+/* 1c minor adjustments */
+xtset panel_id period
+gen d_lnEMPN = d.lnEMPN
+
+/* 1d summary stats */
+reg d_lnEMPN pctchg_Robot_density i.country_id	/* for sample creation */
+gen smpl_main = e(sample)
+
+estpost summarize d_lnEMPN pctchg_Robot_density ln_gdp_pc d_demand ln_k_l_ratio if smpl_main==1
+esttab using "$outputpath\robot_summary_stats.tex", cells("N(fmt(0)) mean(fmt(3)) sd(fmt(3)) min(fmt(2)) max(fmt(2))") label title("Summary Statistics") replace	
+
+pwcorr ln_gdp_pc d_demand ln_k_l_ratio if smpl_main==1
+
+*descriptive scatter graph
+twoway (scatter d_lnEMPN pctchg_Robot_density if smpl_main==1 & ln_gdp_pc<11.165, ytitle("{&Delta} ln L") xtitle("{&Delta} Robots") legend(label(1 "lower income") label(3 "higher income") order(1 3) pos(6) col(2)) col(gs3)) (lfit d_lnEMPN pctchg_Robot_density if smpl_main==1 & ln_gdp_pc<11.165, col(gs3) lpat(dash) lwidth(medthick)) (scatter d_lnEMPN pctchg_Robot_density if smpl_main==1 & ln_gdp_pc>=11.165, col(stblue)) (lfit d_lnEMPN pctchg_Robot_density if smpl_main==1 & ln_gdp_pc>=11.165, col(stblue)) 
+graph export "$outputpath\robot_descrscatter.pdf", as(pdf) replace
+
+sum pctchg_Robot_density if smpl_main==1 & ln_gdp_pc<11.165
+sum pctchg_Robot_density if smpl_main==1 & ln_gdp_pc>=11.165
+corr pctchg_Robot_density ln_gdp_pc if smpl_main==1
+
+*******************
+*** 2. ANALYSIS ***
+*******************
+
+/* 2a regression test (for consistency with Dijkstra and Wacker, 2024) */
+
+ivreg2 d.lnEMP pctchg_Robot_density i.country_id [aweight=emp_share_sec], partial(i.country_id) cluster(country_id sector_id)	/* identical do Dijkstra and Wacker */
+ivreg2 d.lnEMP pctchg_Robot_density i.country_id, partial(i.country_id) cluster(country_id sector_id)	/* unweighted */
+ivreg2 d.lnEMP pctchg_Robot_density i.country_id, partial(i.country_id) cluster(country_id)		/* unweighted, single clustering */
+reg d_lnEMPN pctchg_Robot_density i.country_id, robust cluster(country_id)	/* same, but with "regress" command */
+local effect_simple = _b[pctchg_Robot_density]
+
+/* 2b interaction regressions */
+
+*ITE
+reg d_lnEMPN c.pctchg_Robot_density i.country_id, robust cluster(country_id)
+estimates store model_baseline, title(Model 1)
+
+reg d_lnEMPN c.pctchg_Robot_density c.pctchg_Robot_density#c.ln_gdp_pc i.country_id, robust cluster(country_id)
+estimates store model_ite2, title(Model 2)
+local effect_ite_base = _b[pctchg_Robot_density]
+local effect_ite_interact = _b[c.pctchg_Robot_density#c.ln_gdp_pc]
+
+reg d_lnEMPN c.pctchg_Robot_density c.pctchg_Robot_density#c.d_demand i.country_id, robust cluster(country_id)
+estimates store model_ite3, title(Model 3)
+
+reg d_lnEMPN c.pctchg_Robot_density c.pctchg_Robot_density#c.ln_gdp_pc c.pctchg_Robot_density#c.d_demand i.country_id, robust cluster(country_id)
+estimates store model_ite4, title(Model 4)
+
+reg d_lnEMPN c.pctchg_Robot_density c.pctchg_Robot_density#c.ln_gdp_pc c.pctchg_Robot_density#c.d_demand c.pctchg_Robot_density#c.ln_k_l_ratio i.country_id, robust cluster(country_id)
+estimates store model_ite5, title(Model 5)
+
+*CITE
+
+* CITE (unbalanced)
+
+bysort country_id: generate unique_id = 1 if _n == 1	/* so we can refer to ONE observation within panel unit */
+gen CITE_b1 = .
+gen CITE_se1 = .
+qui reg d_lnEMPN c.pctchg_Robot_density#i.country_id i.country_id, robust cluster(country_id) nocon
+levelsof country_id if e(sample), local(levels)
+foreach l of local levels {
+    replace CITE_b1 = _b[pctchg_Robot_density#`l'.country_id] if country_id==`l'
+	replace CITE_se1 = _se[pctchg_Robot_density#`l'.country_id] if country_id==`l'
+}
+
+reg CITE_b1 if unique_id==1, robust
+estimates store model_cite_baseline, title(Model 6)
+
+*hist CITE_b1 if unique_id==1, graphregion(color(white)) xtitle({&kappa}{sub:1} CITE)
+*graph export CITE_fe_hist.pdf, as(pdf) replace
+*sum delta1_cite if unique_id==1, det
+
+reg CITE_b1 ln_gdp_pc if unique_id==1, robust
+estimates store model_cite2, title(Model 7)
+local effect_cite_base = _b[_cons]
+local effect_cite_interact = _b[ln_gdp_pc]
+
+reg CITE_b1 d_demand if unique_id==1, robust
+estimates store model_cite3, title(Model 8)
+
+reg CITE_b1 ln_gdp_pc d_demand if unique_id==1, robust
+estimates store model_cite4, title(Model 9)
+
+reg CITE_b1 ln_gdp_pc d_demand ln_k_l_ratio if unique_id==1, robust
+estimates store model_cite5, title(Model 10)
+
+*Summarize results
+estout model_baseline model_ite2 model_ite3 model_ite4 model_ite5, cells(b(star fmt(3)) se(par fmt(2))) stats(r2 N) legend starlevels(* 0.1 ** 0.05 *** 0.01) keep(pctchg_Robot_density c.pctchg_Robot_density#c.ln_gdp_pc c.pctchg_Robot_density#c.d_demand)
+
+esttab model_baseline model_ite2 model_ite3 model_ite4 using "$outputpath\robot_ite_results.tex", cells(b(star fmt(3)) se(par fmt(2))) stats(r2 N) legend starlevels(* 0.1 ** 0.05 *** 0.01) keep(pctchg_Robot_density c.pctchg_Robot_density#c.ln_gdp_pc c.pctchg_Robot_density#c.d_demand) replace
+
+estout model_cite_baseline model_cite2 model_cite3 model_cite4 model_cite5, cells(b(star fmt(3)) se(par fmt(2))) stats(r2 N) legend starlevels(* 0.1 ** 0.05 *** 0.01) keep(_cons ln_gdp_pc d_demand ln_k_l_ratio)
+
+esttab model_cite_baseline model_cite2 model_cite3 model_cite4 using "$outputpath\robot_cite_results.tex", cells(b(star fmt(3)) se(par fmt(2))) stats(r2 N) legend starlevels(* 0.1 ** 0.05 *** 0.01) keep(_cons ln_gdp_pc d_demand) replace
+
+twoway (scatter CITE_b1 ln_gdp_pc if unique_id==1, mlab(country_id) mcol(gs5) mlabcol(gs5)) (function y = `effect_simple', ra(ln_gdp_pc)) (function y = `effect_ite_base' + `effect_ite_interact'*x, ra(ln_gdp_pc) clpat(shortdash) clwidth(medthick)) (function y = `effect_cite_base' + `effect_cite_interact'*x, ra(ln_gdp_pc) clpat(longdash) clwidth(medthick) clcolor(blue) legend(lab(2 "no interaction") lab(3 "ITE") lab(4 "CITE") order(2 3 4) pos(6) cols(3)) xtitle("ln GDP p.c.") ytitle({&delta} ln employment / {&delta} robot adoption))
+graph export "$outputpath\robot_coefscatter.pdf", as(pdf) replace
+
+* --> visual inspection suggests quadratic -->:
+reg CITE_b1 c.ln_gdp_pc##c.ln_gdp_pc if unique_id==1, robust
+reg CITE_b1 c.ln_gdp_pc##c.ln_gdp_pc ln_k_l_ratio if unique_id==1, robust
+
+*************************
+** 3. MARGINAL EFFECTs **
+*************************
+
+sum ln_gdp_pc if smpl_main==1 & Country=="BGR"
+sum ln_gdp_pc if smpl_main==1 & Country=="DEU"
+sum ln_gdp_pc if smpl_main==1 & Country=="USA"
+
+********************
+** 4. DIAGNOSTICs **
+********************
+
+reg CITE_b1 ln_gdp_pc if unique_id==1
+lvr2plot, mlab(Country)
+predict cite_cooksdist, cooksd
+brow Country cite_cooksdist if unique_id==1 & cite_cooksdist > (4/(35-2))
+
+reg CITE_b1 ln_gdp_pc if unique_id==1 & cite_cooksdist < (4/(35-2))
+reg d_lnEMPN c.pctchg_Robot_density c.pctchg_Robot_density#c.ln_gdp_pc i.country_id if cite_cooksdist < (4/(35-2)), robust cluster(country_id)
