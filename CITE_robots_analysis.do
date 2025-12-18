@@ -248,7 +248,6 @@ reg CITE_b1 c.ln_gdp_pc##c.ln_gdp_pc ln_k_l_ratio if unique_id==1, robust
 reg CITE_b1 ln_gdp_pc if unique_id==1
 lvr2plot, mlab(Country)
 predict cite_cooksdist, cooksd
-brow Country cite_cooksdist if unique_id==1 & cite_cooksdist > (4/(35-2))
 
 reg CITE_b1 ln_gdp_pc if unique_id==1 & cite_cooksdist < (4/(35-2))
 reg d_lnEMPN c.pctchg_Robot_density c.pctchg_Robot_density#c.ln_gdp_pc i.country_id if cite_cooksdist < (4/(35-2)), robust cluster(country_id)
