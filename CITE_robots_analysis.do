@@ -105,7 +105,6 @@ bys country_id: sum pctchg_Robot_density if smpl_main==1
 
 /* 2a regression test (for consistency with Dijkstra and Wacker, 2025) */
 
-ivreg2 d.lnEMP pctchg_Robot_density i.country_id [aweight=emp_share_sec], partial(i.country_id) cluster(country_id sector_id)	/* identical do Dijkstra and Wacker */
 ivreg2 d.lnEMP pctchg_Robot_density i.country_id, partial(i.country_id) cluster(country_id sector_id)	/* unweighted */
 ivreg2 d.lnEMP pctchg_Robot_density i.country_id, partial(i.country_id) cluster(country_id)		/* unweighted, single clustering */
 reg d_lnEMPN pctchg_Robot_density i.country_id, robust cluster(country_id)	/* same, but with "regress" command */
