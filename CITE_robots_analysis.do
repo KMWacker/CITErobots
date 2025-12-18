@@ -73,7 +73,7 @@ merge 1:m Country using "CITE_robots_firstdiffdata.dta"
 keep if _merge==3
 drop _merge
 
-keep Country country ctfp labsh irr ln_k_l_ratio ln_gdp_pc sector_code period Sectorcode IFRcountry sectorname_long IndustryFinaldemand pctchg_Robot_density lnEMPN emp_share_sec panel_id country_id sector_id d_demand
+keep Country country ctfp labsh irr ln_k_l_ratio ln_gdp_pc sector_code period Sectorcode IFRcountry sectorname_long IndustryFinaldemand pctchg_Robot_density lnEMPN panel_id country_id sector_id d_demand
 
 /* 1c minor adjustments */
 xtset panel_id period
