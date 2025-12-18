@@ -98,6 +98,7 @@ pwcorr ln_gdp_pc d_demand if smpl_main==1
 *check for meaningfulness of assumption 2
 bys country_id: sum pctchg_Robot_density if smpl_main==1
 
+sort panel_id period, stable
 
 *******************
 *** 2. ANALYSIS ***
