@@ -3,10 +3,11 @@
 This repository documents the STATA code for our "Estimating interaction effects with panel data" application to robotization and employment (with Chris Muris; GitHub: chrismuris).
 
 1. Please download the files CITE_robots_analysis.do and CITE_robots_analysis.dta and save them in a folder.
-2. Create a Output
-3. Adjust the path in line 21 and 23 and save the .do file
-The CITE_robot_analysis file requires adjustment of the file path to your system in the beginning. Place the CITE_robots_firstdiffdata.dta file in the respective folder.
-To run the file, a web connection is required (for sourcing Penn World Table data).
+2. Create a folder "Outputs" within the folder where you stored the .do and .dta file. Key outputs (graphs and tables) will be stored in this folder.
+3. Adjust the path in lines 21 and 23 of the .do file (to match your system and folder structure) and save the .do file
+4. Run the .do file
+
+A web connection is required for sourcing Penn World Table data in line 33 of the .do file. If you get an error message at that stage, please manually download PWT10.0 dta from the internet and adjust this line to use the downloaded data from your system.
 
 Essential variables in the dataset (CITE_robots_firstdiff.dta) are:
 
